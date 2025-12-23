@@ -32,25 +32,20 @@ def set_module(obj, mod):
 cmake_prefix_path = _osp.join(_osp.dirname(_osp.dirname(__file__)), "share", "cmake")
 
 
-def _clear_weak_id_refs(obj):
+def _has_non_weakidref_weakrefs(obj) -> bool:
     """
-    Clear WeakIdRef weakrefs from WeakIdKeyDictionaries.
+    Check if obj has any weakrefs that are NOT WeakIdRef.
 
-    This is used to remove weakrefs held by TracingContext.tensor_to_context and
-    MetaTensorDescriber.lookup_tensor before swapping tensors.
-
-    Each WeakIdRef stores a weak reference to its dictionary (_dict_ref) and
-    provides a remove_from_dict() method to remove itself. This avoids needing
-    gc.collect() because we directly clear the dictionary entry.
-
-    This is in a separate function so that all local variables (including the loop
-    variable and the list from getweakrefs) are cleaned up when the function returns.
+    WeakIdRef uses id() for identity, which doesn't change during swap_tensors,
+    so those weakrefs are safe and don't need to be cleared. Other weakref types
+    may not be safe and should prevent swapping.
     """
     from torch.utils.weak import WeakIdRef
 
     for wr in weakref.getweakrefs(obj):
-        if type(wr) is WeakIdRef:
-            wr.remove_from_dict()
+        if type(wr) is not WeakIdRef:
+            return True
+    return False
 
 
 def swap_tensors(t1, t2):
@@ -61,18 +56,14 @@ def swap_tensors(t1, t2):
 
     This will not work if t1 and t2 have different slots.
     """
-    # Clear WeakIdRef weakrefs from WeakIdKeyDictionaries (e.g., from
-    # TracingContext.tensor_to_context and MetaTensorDescriber.lookup_tensor).
-    # This is in a separate function to ensure local variables don't keep
-    # the weakrefs alive.
-    _clear_weak_id_refs(t1)
-
-    if weakref.getweakrefs(t1):
+    # WeakIdRef weakrefs (from TracingContext.tensor_to_context,
+    # MetaTensorDescriber.lookup_tensor, etc.) are safe because they use id()
+    # for identity, which doesn't change during swap. Other weakref types
+    # may not be safe.
+    if _has_non_weakidref_weakrefs(t1):
         raise RuntimeError("Cannot swap t1 because it has weakref associated with it")
 
-    _clear_weak_id_refs(t2)
-
-    if weakref.getweakrefs(t2):
+    if _has_non_weakidref_weakrefs(t2):
         raise RuntimeError("Cannot swap t2 because it has weakref associated with it")
     t1_slots = set(copyreg._slotnames(t1.__class__))  # type: ignore[attr-defined]
     t2_slots = set(copyreg._slotnames(t2.__class__))  # type: ignore[attr-defined]

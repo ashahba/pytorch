@@ -8605,15 +8605,13 @@ class ReproTestsDevice(torch._dynamo.test_case.TestCase):
         # 1. TracingContext.tensor_to_context
         # 2. MetaTensorDescriber.lookup_tensor
 
-        # Check for weakrefs
+        # Check for weakrefs - there should be WeakIdRef weakrefs from the above
         t1 = linear.weight
         self.assertEqual(len(weakref.getweakrefs(t1)), 2)
 
-        # Move to cpu. swap_tensors will clear the WeakIDRefs form their respective dictionaries
+        # Move to cpu. swap_tensors allows WeakIdRef weakrefs because they use id()
+        # for identity, which doesn't change during swap, so they're safe to keep.
         linear.cpu()
-
-        # Check for weakrefs
-        self.assertEqual(len(weakref.getweakrefs(t1)), 0)
 
         # Move back to cuda and check that there is no recompile
         linear.to(device)

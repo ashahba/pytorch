@@ -2245,6 +2245,13 @@ if not torch.allclose(eager_result, compiled_result, atol=0.1, rtol=0.01):
             # static_gm is lambda x: x * 3
             static_gm, args, kwargs = self.capture(f, dynamic=False)(static_x)
             assert not kwargs
+
+        ### START: SWAP TO SHOW CLEARING WEAKREFS BREAKS
+        y = torch.ones_like(static_x)
+        torch.utils.swap_tensors(static_x, y)
+        torch.utils.swap_tensors(static_x, y)
+        ## END
+
         compiled_artifact = torch._inductor.standalone_compile(
             static_gm, [static_x], dynamic_shapes=dynamic_shapes, aot=is_aot
         )

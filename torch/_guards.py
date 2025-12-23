@@ -948,9 +948,7 @@ class TracingContext:
         # must not specialize on.
         self.force_unspec_int_unbacked_size_like = False
         # See note [Tensor Fakification and Symbol Caching]
-        # allow_weakref_clear=True allows swap_tensors to clear weakrefs from
-        # this dictionary before swapping tensors.
-        self.tensor_to_context = WeakTensorKeyDictionary(allow_weakref_clear=True)
+        self.tensor_to_context = WeakTensorKeyDictionary()
 
         # If this true, Aot Autograd will return output Fake Tensors with appropriate
         # meta on the first invocation

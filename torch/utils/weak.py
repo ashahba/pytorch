@@ -73,7 +73,7 @@ class _IterationGuard:
 # WeakIdRef(tensor) rather than weakref.ref(tensor); it handles a number of
 # easy to get wrong cases transparently for you.
 class WeakIdRef(weakref.ref):
-    __slots__ = ["_id", "_dict_ref"]
+    __slots__ = ["_id"]
 
     def __init__(self, key, callback=None) -> None:
         # Unlike stock weakref, which preserves hash semantics of the
@@ -82,9 +82,6 @@ class WeakIdRef(weakref.ref):
         # cache the id of the key as we know this is definitely the hash
         # method
         self._id = id(key)
-        # Weak reference to the WeakIdKeyDictionary this key belongs to.
-        # Set by WeakIdKeyDictionary when adding entries.
-        self._dict_ref: ref | None = None
         super().__init__(key, callback)  # type: ignore[call-arg]
 
     def __call__(self):
@@ -115,21 +112,6 @@ class WeakIdRef(weakref.ref):
         if a is not None and b is not None:
             return a is b
         return self is other
-
-    def remove_from_dict(self) -> None:
-        """
-        Remove this weakref's key from its associated WeakIdKeyDictionary.
-
-        This is used by swap_tensors to clear WeakIdRef weakrefs from
-        TracingContext.tensor_to_context and MetaTensorDescriber.lookup_tensor
-        before swapping tensors.
-        """
-        if self._dict_ref is not None:
-            d = self._dict_ref()
-            if d is not None:
-                key = self()
-                if key is not None:
-                    d.pop(key, None)
 
 
 # This is the same as WeakIdRef but equality is checked using hash() rather than id.
@@ -169,17 +151,10 @@ class _WeakHashRef(weakref.ref):
 
 # This is directly adapted from cpython/Lib/weakref.py
 class WeakIdKeyDictionary(MutableMapping):
-    def __init__(
-        self, dict=None, ref_type=WeakIdRef, *, allow_weakref_clear: bool = False
-    ) -> None:  # CHANGED
+    def __init__(self, dict=None, ref_type=WeakIdRef) -> None:  # CHANGED
         self.data = {}
 
         self.ref_type = ref_type  # CHANGED
-        # If True, WeakIdRefs created by this dictionary will have _dict_ref set,
-        # allowing them to be removed via WeakIdRef.remove_from_dict().
-        # This is used by TracingContext.tensor_to_context and
-        # MetaTensorDescriber.lookup_tensor to support swap_tensors.
-        self._allow_weakref_clear = allow_weakref_clear
 
         def remove(k, selfref=ref(self)) -> None:
             self = selfref()
@@ -241,13 +216,7 @@ class WeakIdKeyDictionary(MutableMapping):
         return f"<{self.__class__.__name__} at {id(self):#x}>"
 
     def __setitem__(self, key, value) -> None:
-        wr = self.ref_type(key, self._remove)  # CHANGED
-        # Store a weak reference to this dictionary so the weakref can
-        # remove itself via remove_from_dict(). Only enabled for specific
-        # dictionaries that are safe to clear (e.g., TracingContext.tensor_to_context).
-        if self._allow_weakref_clear and hasattr(wr, "_dict_ref"):
-            wr._dict_ref = ref(self)
-        self.data[wr] = value
+        self.data[self.ref_type(key, self._remove)] = value  # CHANGED
 
     def copy(self):
         new = WeakIdKeyDictionary()
@@ -330,10 +299,9 @@ class WeakIdKeyDictionary(MutableMapping):
         return self.data.pop(self.ref_type(key), *args)  # CHANGED
 
     def setdefault(self, key, default=None):
-        wr = self.ref_type(key, self._remove)  # CHANGED
-        if self._allow_weakref_clear and hasattr(wr, "_dict_ref"):
-            wr._dict_ref = ref(self)
-        return self.data.setdefault(wr, default)
+        return self.data.setdefault(
+            self.ref_type(key, self._remove), default
+        )  # CHANGED
 
     def update(self, dict=None, **kwargs) -> None:  # type: ignore[override]
         d = self.data
@@ -341,10 +309,7 @@ class WeakIdKeyDictionary(MutableMapping):
             if not hasattr(dict, "items"):
                 dict = type({})(dict)
             for key, value in dict.items():
-                wr = self.ref_type(key, self._remove)  # CHANGED
-                if self._allow_weakref_clear and hasattr(wr, "_dict_ref"):
-                    wr._dict_ref = ref(self)
-                d[wr] = value
+                d[self.ref_type(key, self._remove)] = value  # CHANGED
         if kwargs:
             self.update(kwargs)
 
