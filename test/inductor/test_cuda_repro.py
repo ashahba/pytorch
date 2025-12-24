@@ -43,12 +43,11 @@ from torch.testing._internal.common_utils import (
     MI350_ARCH,
     parametrize,
     skipIfRocmArch,
-    TEST_WITH_ASAN,
-    TEST_WITH_ROCM,
     skipIfXpu,
     TEST_CUDA,
+    TEST_WITH_ASAN,
+    TEST_WITH_ROCM,
     TEST_XPU,
-    xfailIfPy312Plus,
 )
 from torch.testing._internal.inductor_utils import IS_BIG_GPU
 
