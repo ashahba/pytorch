@@ -951,6 +951,36 @@ from user code:
                 )
                 self.assertTrue(callable(compiled_fn))
 
+    @unittest.skipIf(not TEST_CUDA, "requires cuda")
+    def test_inductor_standalone_compile_with_fake_inputs(self):
+        from torch._subclasses.fake_tensor import FakeTensorMode
+
+        def fn(x, y):
+            return x + y * 2
+
+        gm = torch.fx.symbolic_trace(fn)
+        fake_mode = FakeTensorMode()
+        with fake_mode:
+            example_inputs = [
+                torch.randn(3, 4, device="cuda"),
+                torch.randn(3, 4, device="cuda"),
+            ]
+            compiled = torch._inductor.standalone_compile(
+                gm, example_inputs, dynamic_shapes="from_graph"
+            )
+            self.assertIsNotNone(compiled)
+
+    def test_is_aligned_with_fake_tensors(self):
+        from torch._inductor.utils import _is_aligned
+        from torch._subclasses.fake_tensor import FakeTensorMode
+
+        _is_aligned(torch.randn(10))
+
+        fake_mode = FakeTensorMode()
+        with fake_mode:
+            fake_tensor = torch.randn(10)
+        self.assertTrue(_is_aligned(fake_tensor))
+
 
 if __name__ == "__main__":
     from torch._dynamo.test_case import run_tests
