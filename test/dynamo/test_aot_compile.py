@@ -1038,6 +1038,40 @@ from user code:
                 self.assertIsNotNone(new_kernel_idx)
                 self.assertIsNotNone(kernel_side_table.get_kernel(new_kernel_idx))
 
+    def test_dynamo_graph_capture_reorders_parameters(self):
+        from torch._dynamo.functional_export import _dynamo_graph_capture_for_export
+
+        class SimpleModel(torch.nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.linear1 = torch.nn.Linear(10, 20)
+                self.linear2 = torch.nn.Linear(20, 30)
+                self.linear3 = torch.nn.Linear(30, 10)
+
+            def forward(self, x):
+                return self.linear3(self.linear2(self.linear1(x)))
+
+        model = SimpleModel()
+        gm = _dynamo_graph_capture_for_export(model)((torch.randn(5, 10),))
+        self.assertGreater(len(list(gm.parameters())), 0)
+
+    def test_dynamo_graph_capture_preserves_fake_tensor_val(self):
+        from torch._dynamo.functional_export import _dynamo_graph_capture_for_export
+        from torch._subclasses.fake_tensor import FakeTensorMode, is_fake
+
+        def fn(x):
+            return x * 2
+
+        fake_mode = FakeTensorMode()
+        with fake_mode:
+            fake_input = torch.randn(3, 4)
+            gm = _dynamo_graph_capture_for_export(fn)((fake_input,))
+            for node in gm.graph.nodes:
+                if node.op == "placeholder":
+                    val = node.meta.get("val")
+                    if val is not None and isinstance(val, torch.Tensor):
+                        self.assertTrue(is_fake(val))
+
 
 if __name__ == "__main__":
     from torch._dynamo.test_case import run_tests
