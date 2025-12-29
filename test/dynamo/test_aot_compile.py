@@ -35,6 +35,23 @@ MY_LAMBDA = lambda x: x + 1  # noqa: E731
 
 EPS = torch.tensor(1e-7)
 
+try:
+    import triton
+    import triton.language as tl
+
+    @triton.jit
+    def add_kernel(x_ptr, y_ptr, output_ptr, n_elements, BLOCK_SIZE: tl.constexpr):
+        pid = tl.program_id(axis=0)
+        block_start = pid * BLOCK_SIZE
+        offsets = block_start + tl.arange(0, BLOCK_SIZE)
+        mask = offsets < n_elements
+        x = tl.load(x_ptr + offsets, mask=mask)
+        y = tl.load(y_ptr + offsets, mask=mask)
+        tl.store(output_ptr + offsets, x + y, mask=mask)
+
+except ImportError:
+    add_kernel = None
+
 
 class MooType:
     def __init__(self, x):
@@ -980,6 +997,46 @@ from user code:
         with fake_mode:
             fake_tensor = torch.randn(10)
         self.assertTrue(_is_aligned(fake_tensor))
+
+    @unittest.skipIf(not TEST_CUDA, "requires cuda")
+    def test_graph_pickler_triton_kernel_serialization(self):
+        from torch._higher_order_ops.triton_kernel_wrap import (
+            kernel_side_table,
+            triton_kernel_wrapper_functional,
+        )
+        from torch._subclasses.fake_tensor import FakeTensorMode
+        from torch.fx._graph_pickler import GraphPickler
+
+        graph = torch.fx.Graph()
+        x = graph.placeholder("x")
+        y = graph.placeholder("y")
+        kernel_idx = kernel_side_table.add_kernel(add_kernel)
+        constant_args_idx = kernel_side_table.add_constant_args({"BLOCK_SIZE": 1024})
+        triton_call = graph.call_function(
+            triton_kernel_wrapper_functional,
+            args=(),
+            kwargs={
+                "kernel_idx": kernel_idx,
+                "constant_args_idx": constant_args_idx,
+                "grid": [(1,)],
+                "kwargs": {"x_ptr": x, "y_ptr": y, "n_elements": 1024},
+                "tensors_to_clone": ["x_ptr"],
+            },
+        )
+        graph.output(triton_call)
+        gm = torch.fx.GraphModule({}, graph)
+
+        serialized = GraphPickler.dumps(gm)
+        deserialized_gm = GraphPickler.loads(serialized, FakeTensorMode())
+
+        for node in deserialized_gm.graph.nodes:
+            if (
+                node.op == "call_function"
+                and node.target is triton_kernel_wrapper_functional
+            ):
+                new_kernel_idx = node.kwargs.get("kernel_idx")
+                self.assertIsNotNone(new_kernel_idx)
+                self.assertIsNotNone(kernel_side_table.get_kernel(new_kernel_idx))
 
 
 if __name__ == "__main__":
