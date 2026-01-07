@@ -783,15 +783,29 @@ def _safe_clone(src: torch.Tensor) -> Optional[torch.Tensor]:
 # share storage because this is how we correlate shared storages to the same
 # meta storages. This class will hold weak references to cached tenosrs
 # and tensor storages.
+# Cache key for tensor_memo: (MetaTensorId, shape, dtype, device)
+# This ensures that if a tensor's properties change (e.g., via swap_tensors),
+# we get a cache miss and create a new fake tensor with correct properties.
+# If the tensor is swapped back, we get a cache hit and recover the original.
+_TensorMemoKey = tuple[MetaTensorId, tuple[int, ...], torch.dtype, torch.device]
+
+
+def _make_tensor_memo_key(t: "MetaTensorDesc") -> _TensorMemoKey:
+    """Create a cache key from tensor descriptor including metadata."""
+    return (t.id, t.size, t.dtype, t.device)
+
+
 class MetaConverter(Generic[_TensorT]):
     def __init__(self, *, copy_data: bool = False) -> None:
         # Maps MetaStorageId to UntypedStorage
         self.storage_memo: weakref.WeakValueDictionary[
             MetaStorageId, torch.UntypedStorage
         ] = weakref.WeakValueDictionary()
-        # Maps MetaTensorId to torch.Tensor (typically a meta tensor or
-        # FakeTensor)
-        self.tensor_memo: weakref.WeakValueDictionary[MetaTensorId, _TensorT] = (
+        # Maps (MetaTensorId, shape, dtype, device) to torch.Tensor
+        # (typically a meta tensor or FakeTensor).
+        # The key includes metadata so that if tensor properties change
+        # (e.g., via swap_tensors), we get a cache miss.
+        self.tensor_memo: weakref.WeakValueDictionary[_TensorMemoKey, _TensorT] = (
             weakref.WeakValueDictionary()
         )
         self.hit = 0
@@ -809,15 +823,15 @@ class MetaConverter(Generic[_TensorT]):
         return self.hit > 0 and self.miss == 0
 
     def get_tensor_memo(self, t: MetaTensorDesc) -> Optional[torch.Tensor]:
-        return self.tensor_memo.get(t.id, None)
+        return self.tensor_memo.get(_make_tensor_memo_key(t), None)
 
     def _checked_get_tensor_memo(self, t: MetaTensorDesc) -> _TensorT:
-        r = self.tensor_memo.get(t.id, None)
+        r = self.tensor_memo.get(_make_tensor_memo_key(t), None)
         assert r is not None
         return r
 
     def set_tensor_memo(self, t: MetaTensorDesc, v: _TensorT) -> None:
-        self.tensor_memo[t.id] = v
+        self.tensor_memo[_make_tensor_memo_key(t)] = v
 
     def get_storage_memo(self, s: MetaStorageDesc) -> Optional[torch.UntypedStorage]:
         return self.storage_memo.get(s.id, None)

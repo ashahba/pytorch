@@ -1412,56 +1412,49 @@ class FakeTensorConverterTest(TestCase):
         assert mode_weak() is None
         assert y_weak() is None
 
-    def test_swap_tensors_preserves_describer_identity(self):
+    def test_swap_tensors_with_fake_mode(self):
         """
-        Test swap_tensors behavior with MetaTensorDescriber.
+        Test swap_tensors behavior with FakeTensorMode.
 
-        MetaTensorDescriber uses WeakIdKeyDictionary (with WeakIdRef) to track
-        tensor IDs. Since WeakIdRef uses id() for identity and swap_tensors
-        preserves Python object identity:
-        - get_tensor_id() returns the SAME ID (based on Python object identity)
-        - describe_tensor() returns DIFFERENT properties (shape changed)
+        After swap_tensors, the tensor's metadata (shape, dtype, device) changes.
+        The FakeTensorMode cache is keyed by (id, shape, dtype, device), so:
+        - After swap: cache miss -> create new fake tensor with correct shape
+        - After swap back: cache hit -> recover original cached fake tensor
         """
-        from torch._subclasses.meta_utils import MetaTensorDescriber
-
         # Create two tensors with different shapes
         A = torch.randn(2, 3)
         B = torch.randn(4, 5)
 
-        # Create a describer and get tensor ID and description for A
-        describer = MetaTensorDescriber()
-        id_A_before = describer.get_tensor_id(A)
-        desc_A_before = describer.describe_tensor(A)
+        # Convert A to fake tensor before swap
+        mode = FakeTensorMode()
+        fake_A_before = mode.from_tensor(A)
 
-        # Verify A is in the lookup and has original shape
-        self.assertIn(A, describer.lookup_tensor)
-        self.assertEqual(desc_A_before.size, (2, 3))
+        # Verify fake tensor has original shape
+        self.assertEqual(fake_A_before.shape, torch.Size([2, 3]))
 
-        # Swap A and B - A now has B's data, but same Python identity
+        # Swap A and B outside of fake mode
+        # A now has B's data (shape 4,5), B has A's data (shape 2,3)
         torch.utils.swap_tensors(A, B)
 
-        # Verify A's shape changed (has B's original shape)
+        # Verify A's shape changed
         self.assertEqual(A.shape, torch.Size([4, 5]))
 
-        # Get tensor ID for A again - should be SAME because id(A) is preserved
-        id_A_after = describer.get_tensor_id(A)
+        # Convert A to fake tensor - should have NEW shape because cache key
+        # includes metadata (id, shape, dtype, device)
+        fake_A_after_swap = mode.from_tensor(A)
+        self.assertEqual(fake_A_after_swap.shape, torch.Size([4, 5]))
 
-        # The tensor ID is the same (based on Python object identity)
-        self.assertEqual(
-            id_A_before,
-            id_A_after,
-            "Tensor ID should be preserved after swap_tensors because "
-            "WeakIdRef uses id() which doesn't change during swap",
-        )
+        # Swap back: A gets original data (2,3), B gets (4,5)
+        torch.utils.swap_tensors(A, B)
+        self.assertEqual(A.shape, torch.Size([2, 3]))
 
-        # BUT the tensor description is DIFFERENT (reflects new shape)
-        desc_A_after = describer.describe_tensor(A)
-        self.assertEqual(desc_A_after.size, (4, 5))
-        self.assertNotEqual(
-            desc_A_before.size,
-            desc_A_after.size,
-            "Tensor description should reflect the new shape after swap",
-        )
+        # Convert A again - should recover the ORIGINAL cached fake tensor
+        # because the cache key (id, shape, dtype, device) matches
+        fake_A_after_swap_back = mode.from_tensor(A)
+        self.assertEqual(fake_A_after_swap_back.shape, torch.Size([2, 3]))
+
+        # Verify it's the exact same object (cache hit)
+        self.assertIs(fake_A_before, fake_A_after_swap_back)
 
 
 make_propagate_real_tensors_cls(FakeTensorConverterTest)

@@ -342,11 +342,15 @@ class FakeTensorConverter:
         tid = self.meta_converter.describer.lookup_tensor.get(t)
         if tid is None:
             return None
-        return self.tensor_memo.get(tid)
+        # Key includes metadata (shape, dtype, device) so swapped tensors get cache miss
+        key = (tid, tuple(t.shape), t.dtype, t.device)
+        return self.tensor_memo.get(key)
 
     def set_tensor_memo(self, t: Tensor, v: FakeTensor) -> None:
         tid = self.meta_converter.describer.get_tensor_id(t)
-        self.meta_converter.tensor_memo[tid] = v
+        # Key includes metadata (shape, dtype, device) so swapped tensors get cache miss
+        key = (tid, tuple(t.shape), t.dtype, t.device)
+        self.meta_converter.tensor_memo[key] = v
 
     # You can have a real tensor that you need to convert into a fake tensor.
     # If you have a meta tensor already, call from_meta_and_device.
