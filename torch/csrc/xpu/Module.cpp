@@ -609,7 +609,6 @@ static void initXpuMethodBindings(PyObject* module) {
 
     return result;
   });
-  m.def("_xpu_recordMemoryHistory", &torch::xpu::_record_memory_history);
 }
 
 // Callback for python part. Used for additional initialization of python
