@@ -4720,6 +4720,9 @@ class TestAutograd(TestCase):
 
         self.assertEqual(torch._C._current_graph_task_id(), -1)
 
+    @skipIfTorchDynamo(
+        "_current_graph_task_execution_order requires active backward pass"
+    )
     def test_current_graph_task_execution_order(self):
         predicted = [None]
         all_hooks = []
@@ -6380,6 +6383,7 @@ Done""",
         check(fast_mode=True)
         check(fast_mode=False)
 
+    @skipIfTorchDynamo("hook's None grad check is lost when backward is traced")
     def test_gradcheck_undefined_grad(self):
         def check(fast_mode):
             # when encounter runtime error while running backward
