@@ -8153,8 +8153,6 @@ def forward(self, p_linear_weight, p_linear_bias, b_buffer, x):
 
     @requires_gpu
     @skipIfRocm
-    @testing.expectedFailureSerDer
-    @testing.expectedFailureSerDerNonStrict
     def test_export_gru_gpu(self):
         class M(torch.nn.Module):
             def __init__(self):
@@ -8167,15 +8165,41 @@ def forward(self, p_linear_weight, p_linear_bias, b_buffer, x):
                 out, _ = self.rnn(x)
                 return out
 
+        torch.cuda.manual_seed(0)
         m = M().to(GPU_TYPE)
         x = torch.randn(2, 3, 4, device=GPU_TYPE)
 
         ep = export(m, (x,))
+        print(f"ep.state_dict(): {ep.state_dict}")
+        tensor = ep.state_dict["rnn.weight_hh_l0"].data
+        print("tensor's info: ", tensor.size(), tensor.stride(), tensor.storage_offset())
         self.assertTrue(callable(ep.module()))
 
         eager_out = m(x)
         export_out = ep.module()(x)
         self.assertEqual(eager_out, export_out)
+
+    @requires_gpu
+    @skipIfRocm
+    def test_aaexport_gru_gpu2(self):
+        class M(torch.nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.rnn = torch.nn.GRU(
+                    input_size=4, hidden_size=5, num_layers=1, batch_first=True
+                )
+
+            def forward(self, x):
+                out, _ = self.rnn(x)
+                return out
+
+        torch.cuda.manual_seed(0)
+        m = M().to(GPU_TYPE)
+        print(f"m.state_dict(): {m.state_dict()}")
+        tensor = m.state_dict()["rnn.weight_hh_l0"].data
+        print("weight_hh_l0's info: ", tensor.size(), tensor.stride(), tensor.storage_offset())
+        self.assertTrue(tensor.is_contiguous())
+        self.assertTrue(False)
 
     @requires_gpu
     @skipIfRocm
