@@ -2,6 +2,7 @@ import warnings
 from collections.abc import Callable
 
 from torch.ao.pruning.sparsifier.base_sparsifier import BaseSparsifier
+
 from .base_scheduler import BaseScheduler
 
 

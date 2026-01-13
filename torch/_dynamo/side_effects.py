@@ -35,6 +35,7 @@ from typing import Any, Optional, TYPE_CHECKING
 import torch
 import torch.nn
 from torch._dynamo.variables.misc import AutogradFunctionContextVariable
+
 from . import config, graph_break_hints, utils, variables
 from .bytecode_transformation import (
     bytecode_from_template,
@@ -465,6 +466,7 @@ class SideEffects:
 
     def get_variable_cls(self, user_cls: type) -> type:
         from torch.overrides import TorchFunctionMode
+
         from .variables.ctx_manager import GenericContextWrappingVariable
         from .variables.torch_function import TorchFunctionModeVariable
         from .variables.user_defined import is_forbidden_context_manager

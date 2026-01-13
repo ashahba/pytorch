@@ -17,6 +17,7 @@ non-distributed scenarios.
 from typing import Optional
 
 import torch.distributed as dist
+
 from . import config
 
 

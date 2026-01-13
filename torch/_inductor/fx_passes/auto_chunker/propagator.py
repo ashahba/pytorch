@@ -7,6 +7,7 @@ from typing import Any, TypeAlias
 
 import torch
 from torch.fx import Graph, Node
+
 from .common import CantChunk
 from .core import (
     ChunkingMeta,

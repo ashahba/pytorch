@@ -2,6 +2,7 @@ import argparse
 import sys
 
 from benchmarks.fastrnns.factory import lstm_creator
+
 from torchvision.models import resnet50
 
 import torch

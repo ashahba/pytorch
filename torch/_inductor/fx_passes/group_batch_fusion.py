@@ -11,6 +11,7 @@ from torch._dynamo.utils import counters, is_node_meta_valid
 from torch._logging import trace_structured
 from torch.fx.passes.graph_transform_observer import GraphTransformObserver
 from torch.utils._ordered_set import OrderedSet
+
 from .. import config
 from ..pattern_matcher import (
     CallFunctionVarArgs,

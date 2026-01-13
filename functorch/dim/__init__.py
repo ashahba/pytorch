@@ -11,6 +11,7 @@ if TYPE_CHECKING:
 
 import torch
 from torch.utils._pytree import tree_flatten, tree_map, tree_unflatten
+
 from ._dim_entry import _match_levels, DimEntry, ndim_of_levels
 from ._enable_all_layers import EnableAllLayers
 from ._py_inst_decoder import _PyInstDecoder

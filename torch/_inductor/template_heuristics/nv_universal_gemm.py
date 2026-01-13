@@ -9,6 +9,7 @@ import torch
 from torch._inductor.utils import ensure_nvmatmul_heuristics_available
 from torch._logging import getArtifactLogger
 from torch.utils._ordered_set import OrderedSet
+
 from .gemm import GemmMaxAutotuneTemplateConfigHeuristics
 
 

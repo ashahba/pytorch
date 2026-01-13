@@ -16,6 +16,7 @@ from weakref import WeakValueDictionary
 import torch
 from torch.serialization import _get_restore_location, _maybe_decode_ascii
 from torch.types import FileLike
+
 from ._directory_reader import DirectoryReader
 from ._importlib import (
     _calc___package__,

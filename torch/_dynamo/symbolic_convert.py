@@ -54,6 +54,7 @@ from torch._guards import tracing, TracingContext
 from torch._logging.structured import dump_file
 from torch.fx.experimental.symbolic_shapes import guard_bool
 from torch.utils._functools import cache_method
+
 from . import (
     config,
     exc,
@@ -189,6 +190,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Generator, Sequence
 
     from torch._subclasses.fake_tensor import FakeTensorMode
+
     from .package import CompilePackage
 
 log = logging.getLogger(__name__)

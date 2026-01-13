@@ -41,6 +41,7 @@ import torch
 from torch._dynamo.exc import get_stack_above_dynamo
 from torch._guards import Source
 from torch.utils._pytree import is_namedtuple_class
+
 from .. import config, graph_break_hints, polyfills, variables
 from ..bytecode_transformation import create_call_function, create_rot_n, is_generator
 from ..exc import (
@@ -107,6 +108,7 @@ if TYPE_CHECKING:
         TritonGridType,
         TritonKernelType,
     )
+
     from .lists import BaseListVariable, ListVariable
     from .tensor import TensorVariable
 

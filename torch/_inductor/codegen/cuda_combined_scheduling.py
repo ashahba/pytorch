@@ -25,6 +25,7 @@ if TYPE_CHECKING:
 
     import torch
     from torch.utils._ordered_set import OrderedSet
+
     from .common import BackendFeature
 
     _IntLike: TypeAlias = Union[int, Expr]

@@ -8,6 +8,7 @@ from collections import namedtuple
 
 import torch
 from torch.autograd.profiler import record_function
+
 from .fuser import set_fuser
 from .runner import get_nn_runners
 

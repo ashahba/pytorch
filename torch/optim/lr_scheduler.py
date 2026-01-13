@@ -14,6 +14,7 @@ from typing_extensions import override, Self
 from weakref import ref
 
 from torch import inf, Tensor
+
 from .optimizer import _to_scalar, Optimizer
 
 

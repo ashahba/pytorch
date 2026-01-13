@@ -8,6 +8,7 @@ import torch
 # they are used in the modules.
 import torch.ao.nn.quantizable
 from torch.nn.modules.pooling import MaxPool2d
+
 from .activation import (
     ELU,
     Hardswish,

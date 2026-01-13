@@ -11,6 +11,7 @@ from collections.abc import Iterator, Mapping, Sequence
 from typing import Any, Optional, TypeVar, Union
 
 import onnx
+
 import onnxscript
 from onnxscript import ir
 

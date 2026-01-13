@@ -3,6 +3,7 @@
 import random
 
 import torch
+
 from torchfuzz.operators.base import Operator
 from torchfuzz.tensor_fuzzer import ScalarSpec, Spec
 

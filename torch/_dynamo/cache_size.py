@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Any, Optional
 
 from torch._guards import CompileId
+
 from . import config
 from .types import DynamoFrameType
 

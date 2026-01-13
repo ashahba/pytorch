@@ -17,6 +17,7 @@ import torch
 import torch._C
 from torch._utils import _dummy_type, _LazySeedTracker
 from torch.types import Device
+
 from ._utils import _get_device_index
 from .streams import Event, Stream
 

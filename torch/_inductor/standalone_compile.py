@@ -18,6 +18,7 @@ from torch._inductor.runtime.cache_dir_utils import temporary_cache_dir
 from torch._inductor.utils import BoxedBool, InputType
 from torch._subclasses import FakeTensorMode
 from torch.fx.experimental.symbolic_shapes import ShapeEnv
+
 from . import config
 
 
@@ -76,6 +77,7 @@ class CompiledArtifact(ABC):
         assert format == "binary"
         with open(path, "rb") as file:
             from torch.utils._appending_byte_serializer import BytesReader
+
             from .codecache import torch_key
 
             result_bytes = file.read()
@@ -136,6 +138,7 @@ class CacheCompiledArtifact(CompiledArtifact):
                 assert not os.path.isdir(path)
 
                 from torch.utils._appending_byte_serializer import BytesWriter
+
                 from .codecache import torch_key
 
                 writer = BytesWriter()
@@ -226,6 +229,7 @@ class CacheCompiledArtifact(CompiledArtifact):
                 with open(path, "rb") as file:
                     artifacts = file.read()
                 from torch.utils._appending_byte_serializer import BytesReader
+
                 from .codecache import torch_key
 
                 reader = BytesReader(artifacts)
@@ -295,6 +299,7 @@ class AOTCompiledArtifact(CompiledArtifact):
             )
         result_bytes = self.serialize()
         from torch.utils._appending_byte_serializer import BytesWriter
+
         from .codecache import torch_key
 
         writer = BytesWriter()
@@ -332,6 +337,7 @@ class AOTCompiledArtifact(CompiledArtifact):
             )
         with open(path, "rb") as file:
             from torch.utils._appending_byte_serializer import BytesReader
+
             from .codecache import torch_key
 
             result_bytes = file.read()
@@ -356,6 +362,7 @@ def standalone_compile(
     Implementation of torch.inductor.standalone_compile
     """
     from torch.compiler._cache import CacheArtifactManager
+
     from .compile_fx import compile_fx
 
     ignore_shape_env = False

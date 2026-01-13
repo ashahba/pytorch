@@ -1,6 +1,7 @@
 # mypy: allow-untyped-defs
 
 from torch import Tensor
+
 from .adam import Adam, adam
 from .optimizer import (
     _capturable_doc,

@@ -39,6 +39,7 @@ from typing import Any, NoReturn, Optional, TYPE_CHECKING
 
 import torch._guards
 from torch._utils_internal import get_file_path_2
+
 from . import config
 from .utils import counters
 
@@ -47,6 +48,7 @@ if TYPE_CHECKING:
     import types
 
     from torch._guards import CompileId
+
     from .output_graph import DynamoTracerOutput
     from .symbolic_convert import InstructionTranslatorBase
     from .types import DynamoFrameType, FrameExecStrategy

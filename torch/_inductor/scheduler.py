@@ -19,6 +19,7 @@ from typing import Any, Generic, Optional, TYPE_CHECKING, TypeAlias, TypeVar, Un
 from typing_extensions import ParamSpec
 
 from torch.utils._ordered_set import OrderedSet
+
 from .ir import ComputedBuffer
 
 
@@ -38,6 +39,7 @@ from torch._inductor.metrics import get_metric_table, is_metric_table_enabled
 from torch.fx.experimental.symbolic_shapes import free_symbols
 from torch.utils._sympy.symbol import free_symbol_is_type, symbol_is_type, SymT
 from torch.utils._triton import has_triton
+
 from . import comms, config, config_comms, dependencies, ir, metrics
 from .analyze_preserves_zero_mask import can_codegen_without_upcasts
 from .codegen.common import BackendFeature, get_scheduling_for_device, Kernel

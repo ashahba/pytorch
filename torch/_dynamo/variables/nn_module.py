@@ -32,6 +32,7 @@ from typing import Any, Optional, TYPE_CHECKING
 
 import torch.nn
 from torch._guards import Source
+
 from .. import graph_break_hints, trace_rules, variables
 from ..exc import raise_observed_exception, unimplemented, UnspecializeRestartAnalysis
 from ..guards import GuardBuilder, install_guard
@@ -70,6 +71,7 @@ from .user_defined import UserDefinedObjectVariable
 
 if TYPE_CHECKING:
     from torch._dynamo.symbolic_convert import InstructionTranslator
+
     from .constant import ConstantVariable
 
 

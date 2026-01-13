@@ -8,6 +8,7 @@ from unittest.mock import patch
 from torch._inductor.utils import Placeholder
 from torch._inductor.virtualized import V
 from torch._logging import getArtifactLogger
+
 from ...autotune_process import CuteDSLBenchmarkRequest, TensorMeta
 from ...ir import Buffer, ChoiceCaller, CuteDSLTemplateBuffer, IRNode, Layout, TensorBox
 from ..common import KernelTemplate

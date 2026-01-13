@@ -13,6 +13,7 @@ from torch.fx.operator_schemas import (
     normalize_function,
     normalize_module,
 )
+
 from .schema_type_annotation import AnnotateTypesWithSchema
 
 

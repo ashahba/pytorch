@@ -92,6 +92,7 @@ from torch.nn.modules.lazy import LazyModuleMixin
 from torch.utils._python_dispatch import is_traceable_wrapper_subclass
 from torch.utils._triton import has_triton, has_triton_package
 from torch.utils.hooks import RemovableHandle
+
 from .graph_utils import _get_flat_args
 
 
@@ -130,6 +131,7 @@ try:
     import torch._numpy as tnp
     from torch._guards import detect_fake_mode  # noqa: F401
     from torch._logging import LazyString
+
     from . import config
 
     # NOTE: Make sure `NP_SUPPORTED_MODULES` and `NP_TO_TNP_MODULE` are in sync.
@@ -3400,6 +3402,7 @@ def extract_fake_example_value(node: torch.fx.Node, required: bool = True) -> An
         return node.meta["example_value"]
     elif required:
         from torch._dynamo.exc import unimplemented
+
         from . import graph_break_hints
 
         unimplemented(
@@ -3489,6 +3492,7 @@ def get_fake_value(
         by further wrapping them as this graph's fakes.
     """
     from torch.utils._sympy.value_ranges import ValueRangeError
+
     from .exc import (
         TorchRuntimeError,
         unimplemented,
@@ -4191,6 +4195,7 @@ def build_invoke_subgraph_variable(**options: Any) -> Any:
 
 def build_checkpoint_variable(**options: Any) -> Any:
     import torch._higher_order_ops.wrap as higher_order_ops
+
     from .variables.higher_order_ops import TorchHigherOrderOperatorVariable
 
     # TODO - This is a temporary situation where we have two versions of

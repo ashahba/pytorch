@@ -8,6 +8,7 @@ from typing import Any, cast
 
 import torch
 from torch.utils._ordered_set import OrderedSet
+
 from .. import config, inductor_prims
 from ..pattern_matcher import (
     CallFunction,

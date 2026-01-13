@@ -3,6 +3,7 @@ from typing import Any, cast
 
 import torch
 from torch import Tensor
+
 from .optimizer import (
     _capturable_doc,
     _default_to_fused_or_foreach,

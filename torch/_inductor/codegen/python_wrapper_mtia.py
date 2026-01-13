@@ -2,6 +2,7 @@ from typing import Optional
 from typing_extensions import override
 
 from torch._inductor import ir
+
 from .wrapper import PythonWrapperCodegen
 
 

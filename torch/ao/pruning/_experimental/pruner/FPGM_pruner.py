@@ -2,6 +2,7 @@
 from collections.abc import Callable
 
 import torch
+
 from .base_structured_sparsifier import BaseStructuredSparsifier
 
 

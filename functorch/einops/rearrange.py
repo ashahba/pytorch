@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, Union
 
 import torch
 from functorch.dim import dims  # noqa: F401
+
 from ._parsing import (
     _ellipsis,
     AnonymousAxis,

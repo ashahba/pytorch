@@ -2,6 +2,7 @@ from typing import Any, cast
 
 import torch
 from torch import nn
+
 from .base_structured_sparsifier import BaseStructuredSparsifier
 from .parametrization import FakeStructuredSparsity
 

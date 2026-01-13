@@ -18,6 +18,7 @@ from torch.ao.quantization.fuser_method_mappings import (
     fuse_convtranspose_bn,
     fuse_linear_bn,
 )
+
 from .backend_config import (
     BackendPatternConfig,
     DTypeConfig,

@@ -2,6 +2,7 @@
 from typing import Union
 
 import torch
+
 from . import _is_tensorpipe_available, constants as rpc_contants
 
 

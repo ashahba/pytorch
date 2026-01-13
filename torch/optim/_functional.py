@@ -4,6 +4,7 @@ r"""Functional interface."""
 import math
 
 from torch import Tensor
+
 from .adadelta import adadelta  # type: ignore[attr-defined]  # noqa: F401
 from .adagrad import _make_sparse, adagrad  # type: ignore[attr-defined]  # noqa: F401
 from .adam import adam  # type: ignore[attr-defined]  # noqa: F401

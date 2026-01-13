@@ -4,6 +4,7 @@ from typing import Any
 import torch.nn as nn
 import torch.nn.functional as F
 from torch import Tensor
+
 from .utils import ReferenceQuantizedModule
 
 
