@@ -15,7 +15,6 @@ __all__ = [
     "preferred_linalg_library",
     "preferred_blas_library",
     "preferred_rocm_fa_library",
-    "is_ck_sdpa_available",
     "cufft_plan_cache",
     "matmul",
     "SDPAParams",
