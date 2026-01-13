@@ -534,12 +534,14 @@ class _TestBenchmarkRequest(BenchmarkRequest):
         sleep: Optional[float] = None,
         exc: Optional[Exception] = None,
         crash: bool = False,
+        raise_exception_with_cuda_tensor: bool = False,
     ):
         self.result = result
         self.device = device
         self.sleep = sleep
         self.exc = exc
         self.crash = crash
+        self.raise_exception_with_cuda_tensor = raise_exception_with_cuda_tensor
 
     def benchmark(
         self, *input_tensors: torch.Tensor, out: Optional[torch.Tensor] = None
@@ -552,6 +554,12 @@ class _TestBenchmarkRequest(BenchmarkRequest):
             raise self.exc
         if self.crash:
             sys.exit(1)
+        if self.raise_exception_with_cuda_tensor:
+            # Simulate an exception that captures a CUDA tensor in its context.
+            # This reproduces the issue where the process pool tries to pickle
+            # an exception containing CUDA tensor references when returning results.
+            cuda_tensor = torch.zeros(1, device="cuda")
+            raise RuntimeError(f"Test error with CUDA tensor: {cuda_tensor}")
         return self.result
 
 
@@ -1289,7 +1297,10 @@ class AsyncAutotuner:
 
     @classmethod
     def get_results(
-        cls, choices: list[ChoiceCaller], inputs_key: str
+        cls,
+        choices: list[ChoiceCaller],
+        inputs_key: str,
+        blocking: bool = True,
     ) -> dict[ChoiceCaller, float]:
         """
         Get autotuning results, blocking until complete.
@@ -1304,5 +1315,10 @@ class AsyncAutotuner:
         timings = {}
         for choice in choices:
             choice_hash = AsyncAutotuner.get_choice_hash(choice, inputs_key)
-            timings[choice] = AsyncAutotuner.choice_hash_to_future[choice_hash].result()
+            if blocking:
+                timings[choice] = AsyncAutotuner.choice_hash_to_future[
+                    choice_hash
+                ].result()
+            else:
+                timings[choice] = AsyncAutotuner.choice_hash_to_future[choice_hash]
         return timings
