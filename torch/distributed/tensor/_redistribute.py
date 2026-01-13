@@ -377,24 +377,24 @@ class DTensorRedistributePlanner:
         # Case 6. Replicate() -> Partial(), local math op, applies to:
         #   R* -> P[..., x]
         #
-        # (TODO) Case 7. _StridedShard(a) -> Shard(b), use all-to-all (a2a), applies to:
+        # Case 7. _StridedShard(a) -> Shard(b), use all-to-all (a2a), applies to:
         #   SS(a)[..., x] -> S(b)[..., x]
         #
         # Case 8. _StridedShard() -> Replicate(), use all-gather, applies to:
         #   SS(a)[..., x, y, z] -> SS(a)[..., x, y]
         #
-        # (TODO) Case 9. Shard(a) -> _StridedShard(b), use all-to-all (a2a), applies to:
+        # Case 9. Shard(a) -> _StridedShard(b), use all-to-all (a2a), applies to:
         #   S(a)[..., x] -> SS(b)[..., x]
         #
-        # (TODO) Case 10. Partial() -> _StridedShard(), use reduce-scatter, applies to:
+        # Case 10. Partial() -> _StridedShard(), use reduce-scatter, applies to:
         #   P[..., x, y] -> P[..., x]SS(a)[..., y] or P[..., x, y] -> P[..., y]SS(a)[..., x]
         #
         # Case 11. Replicate() -> _StridedShard(), use chunk, applies to:
         #   R* -> SS(a)[..., x]
         #
-        # NB: Regarding `_StridedShard``, we only allow changing `Replicate` into
-        # `_StridedShard` with the same tensor dim and split_factor that occurs in the
-        # target placement.
+        # NB: Regarding `_StridedShard``, we only allow changing `Partial`, `Replicate`,
+        # `Shard` into `_StridedShard` with the same tensor dim and split_factor that
+        # occurs in the target placement.
         #
         # (TODO) Verify device order impact in Partial placement. We may need to handle
         # device ordering for Partial also.
@@ -544,7 +544,9 @@ class DTensorRedistributePlanner:
         # Additional cases handling for _StridedShard
 
         ######################################################################
-        # TODO(zpcore): handle case 7: _StridedShard() -> Shard() on the same dim
+        # handle case 7: _StridedShard() -> Shard() on the same dim
+        for entry in tensor_mesh_dim_tuple:
+            src_tensore): handle case 7: _StridedShard() -> Shard() on the same dim
 
         ######################################################################
         # handle case 8: _StridedShard() -> Replicate()
@@ -676,8 +678,6 @@ class DTensorRedistributePlanner:
                     )
                 elif isinstance(placement, _StridedShard):
                     new_size, _ = placement.local_shard_size_and_offset(
-                        placement.dim,
-                        placement.split_factor,
                         new_logical_shape[tensor_dim],
                         self.device_mesh.size(mesh_dim=mdim),
                         self.device_mesh._sym_get_coordinate(mdim),
