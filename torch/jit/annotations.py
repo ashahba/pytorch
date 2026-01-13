@@ -56,7 +56,6 @@ from torch._jit_internal import (  # type: ignore[attr-defined]
     Union,
 )
 from torch._sources import get_source_lines_and_file
-
 from ._state import _get_script_class
 
 
