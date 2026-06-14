@@ -20,6 +20,7 @@ import torch
 from torch import Tensor
 from torch._higher_order_ops.flex_attention import flex_attention as flex_attention_hop
 from torch._higher_order_ops.utils import setup_compilation_env
+from torch.fx.experimental.symbolic_shapes import guard_or_false
 from torch.nn.attention._utils import _validate_sdpa_input
 from torch.utils._pytree import (
     GetAttrKey,
@@ -2368,26 +2369,34 @@ def flex_attention(
     else:
         block_mask_q_len = block_mask.shape[-2]
         block_mask_kv_len = block_mask.shape[-1]
-        if query.size(-2) > block_mask_q_len or key.size(-2) > block_mask_kv_len:
+        # Keep concrete/hinted mismatches on the existing ValueError branches.
+        # Truly unbacked comparisons fall through to deferred equality checks.
+        if guard_or_false(query.size(-2) > block_mask_q_len) or guard_or_false(
+            key.size(-2) > block_mask_kv_len
+        ):
             raise ValueError(
                 f"block_mask was created for block_mask.shape={block_mask.shape} but got q_len={query.size(-2)} and kv_len={key.size(-2)}. "
                 "As the block mask was created for a smaller length than you're using it for, you likely need to create a new block mask."
             )
         elif (
-            query.size(-2) < block_mask_q_len and key.size(-2) <= block_mask_kv_len
-        ) or (query.size(-2) <= block_mask_q_len and key.size(-2) < block_mask_kv_len):
+            guard_or_false(query.size(-2) < block_mask_q_len)
+            and guard_or_false(key.size(-2) <= block_mask_kv_len)
+        ) or (
+            guard_or_false(query.size(-2) <= block_mask_q_len)
+            and guard_or_false(key.size(-2) < block_mask_kv_len)
+        ):
             raise ValueError(
                 f"block_mask was created for block_mask.shape={block_mask.shape} but got q_len={query.size(-2)} and kv_len={key.size(-2)}. "
                 "As the block mask was created for a larger length than you're using it for, you can either 1. create a new block mask with the correct length, or 2. 'adjust' the existing block mask to the correct length by calling block_mask._adjust(q_len, kv_len). This essentially 'crops' the block mask to the upper left corner, which does not work for all mask_mods!"
             )
-        if query.size(-2) != block_mask_q_len:
-            raise AssertionError(
-                f"query.size(-2) ({query.size(-2)}) != block_mask_q_len ({block_mask_q_len})"
-            )
-        if key.size(-2) != block_mask_kv_len:
-            raise AssertionError(
-                f"key.size(-2) ({key.size(-2)}) != block_mask_kv_len ({block_mask_kv_len})"
-            )
+        torch._check(
+            query.size(-2) == block_mask_q_len,
+            lambda: "query length must match the block_mask query length",
+        )
+        torch._check(
+            key.size(-2) == block_mask_kv_len,
+            lambda: "key length must match the block_mask key/value length",
+        )
 
     if scale is None:
         scale = 1.0 / math.sqrt(query.size(-1))
