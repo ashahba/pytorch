@@ -29,6 +29,7 @@ import torch.fx
 import torch.utils._pytree as pytree
 from functorch.compile import min_cut_rematerialization_partition
 from torch import fx
+from torch._decomp.decompositions import lstm_impl
 from torch._dispatch.python import enable_python_dispatcher
 from torch._dynamo import (
     compiled_autograd,
@@ -2777,6 +2778,80 @@ class _ConstantDecompTable(Generic[_P, _T]):
         return self.table
 
 
+_LSTM_OPS_TO_PRESERVE = (torch.ops.aten.lstm.input,)
+
+
+def _contains_lstm_op(model_: torch.nn.Module) -> bool:
+    if not isinstance(model_, GraphModule):
+        return False
+
+    return any(
+        node.op == "call_function" and node.target in _LSTM_OPS_TO_PRESERVE
+        for node in model_.graph.nodes
+    )
+
+
+def _lstm_input_decomp_for_inductor(
+    input,
+    hx,
+    params,
+    has_biases,
+    num_layers,
+    dropout,
+    train,
+    bidirectional,
+    batch_first,
+):
+    if input.device.type == "cuda":
+        return NotImplemented
+
+    return lstm_impl(
+        input,
+        hx,
+        params,
+        has_biases,
+        num_layers,
+        dropout,
+        train,
+        bidirectional,
+        batch_first,
+    )
+
+
+_LSTM_CONDITIONAL_DECOMPOSITIONS = {
+    torch.ops.aten.lstm.input: _lstm_input_decomp_for_inductor,
+}
+
+
+def _add_conditional_lstm_decompositions(
+    decompositions: dict[OpOverload, Callable[..., Any]],
+) -> dict[OpOverload, Callable[..., Any]]:
+    decompositions = dict(decompositions)
+    decompositions.update(_LSTM_CONDITIONAL_DECOMPOSITIONS)
+    return decompositions
+
+
+def _select_decomp_table_with_conditional_lstm() -> dict[Any, Callable[..., Any]]:
+    return _add_conditional_lstm_decompositions(select_decomp_table())
+
+
+def _uses_conditional_lstm_decompositions(
+    decompositions: dict[Any, Callable[..., Any]],
+) -> bool:
+    return any(
+        decompositions.get(op) is decomp
+        for op, decomp in _LSTM_CONDITIONAL_DECOMPOSITIONS.items()
+    )
+
+
+@contextlib.contextmanager
+def _override_lstm_cia_ops():
+    from torch.export.exported_program import _override_composite_implicit_decomp
+
+    with _override_composite_implicit_decomp(_LSTM_CONDITIONAL_DECOMPOSITIONS):
+        yield
+
+
 def compile_fx(
     model_: GraphModule,
     example_inputs_: Sequence[InputType],
@@ -2797,12 +2872,20 @@ def compile_fx(
     NB: This function TAKES OWNERSHIP of the input ``model_`` and can potentially
     mutate it!  Make a copy if you need to preserve the original GraphModule.
     """
+    use_conditional_lstm_decompositions = decompositions is None and _contains_lstm_op(
+        model_
+    )
+
     if decompositions is not None:
         get_decomp_fn: Callable[..., dict[Any, Callable[..., Any]]] = (
             _ConstantDecompTable(decompositions)
         )
     else:
-        get_decomp_fn = select_decomp_table
+        get_decomp_fn = (
+            _select_decomp_table_with_conditional_lstm
+            if use_conditional_lstm_decompositions
+            else select_decomp_table
+        )
 
     # Some arguments trigger a recursive call to compile_fx.  Handle these
     # short circuits first, before anything else
@@ -2872,6 +2955,9 @@ def compile_fx(
                     ignore_shape_env=ignore_shape_env,
                     get_decomp_fn=get_decomp_fn,
                     compile_region_name=compile_region_name,
+                    use_conditional_lstm_decompositions=(
+                        use_conditional_lstm_decompositions
+                    ),
                 )
 
     return _maybe_wrap_and_compile_fx_main(
@@ -2881,6 +2967,7 @@ def compile_fx(
         ignore_shape_env,
         get_decomp_fn=get_decomp_fn,
         compile_region_name=compile_region_name,
+        use_conditional_lstm_decompositions=use_conditional_lstm_decompositions,
     )
 
 
@@ -2926,6 +3013,7 @@ def _maybe_wrap_and_compile_fx_main(
     *,
     get_decomp_fn: Callable[..., dict[Any, Callable[..., Any]]] = select_decomp_table,
     compile_region_name: str | None = None,
+    use_conditional_lstm_decompositions: bool = False,
 ) -> CompileFxOutput:
     """
     Part of compile_fx, called after patching configs.
@@ -2942,6 +3030,7 @@ def _maybe_wrap_and_compile_fx_main(
         ignore_shape_env=ignore_shape_env,
         get_decomp_fn=get_decomp_fn,
         compile_region_name=compile_region_name,
+        use_conditional_lstm_decompositions=use_conditional_lstm_decompositions,
     )
     if not graph_returns_tuple(model_):
         return make_graph_return_tuple(model_, example_inputs_, compile_gm)
@@ -2965,6 +3054,7 @@ def _maybe_wrap_and_compile_fx_main(
         ignore_shape_env,
         get_decomp_fn=get_decomp_fn,
         compile_region_name=compile_region_name,
+        use_conditional_lstm_decompositions=use_conditional_lstm_decompositions,
     )
 
 
@@ -2976,6 +3066,7 @@ def _compile_fx_main(
     *,
     get_decomp_fn: Callable[..., dict[Any, Callable[..., Any]]] = select_decomp_table,
     compile_region_name: str | None = None,
+    use_conditional_lstm_decompositions: bool = False,
 ) -> CompileFxOutput:
     """
     Main part of compile_fx, called after wrapping is done.
@@ -3008,6 +3099,10 @@ def _compile_fx_main(
         compiler_config_extra = create_compiler_config_extra(model_)
 
         decompositions = get_decomp_fn()
+        override_lstm_cia_ops = (
+            use_conditional_lstm_decompositions
+            and _uses_conditional_lstm_decompositions(decompositions)
+        )
         inner_compile = functools.partial(inner_compile, get_decomp_fn=get_decomp_fn)
 
         def fw_compiler_base(
@@ -3086,9 +3181,14 @@ def _compile_fx_main(
             if isinstance(model_, GraphModule):
                 model_ = run_pre_grad_passes(model_, example_inputs_)
 
-            with functorch_config.patch(
-                unlift_effect_tokens=True,
-                selective_decompose=config.selective_decompose,
+            with (
+                functorch_config.patch(
+                    unlift_effect_tokens=True,
+                    selective_decompose=config.selective_decompose,
+                ),
+                _override_lstm_cia_ops()
+                if override_lstm_cia_ops
+                else contextlib.nullcontext(),
             ):
                 gm, graph_signature = aot_export_module(
                     model_,
@@ -3161,6 +3261,9 @@ def _compile_fx_main(
                 unlift_effect_tokens=True,
                 selective_decompose=config.selective_decompose,
             ),
+            _override_lstm_cia_ops()
+            if override_lstm_cia_ops
+            else contextlib.nullcontext(),
         ):
             try:
                 return dynamo_common.aot_autograd(
