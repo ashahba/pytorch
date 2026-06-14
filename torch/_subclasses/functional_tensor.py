@@ -6,7 +6,7 @@ import warnings
 import weakref
 from abc import ABC, abstractmethod
 from contextlib import AbstractContextManager
-from typing import Any, TYPE_CHECKING
+from typing import Any, cast, TYPE_CHECKING
 from typing_extensions import Self
 
 
@@ -443,11 +443,15 @@ class FunctionalTensorMode(TorchDispatchMode):
     def __enter__(self) -> Self:
         def _get_prev_mode() -> FunctionalTensorMode | None:
             if self._dispatch_key == torch._C.DispatchKey.PreDispatch:
-                return _get_dispatch_mode_pre_dispatch(
-                    torch._C._TorchDispatchModeKey.FUNCTIONAL
+                return cast(
+                    FunctionalTensorMode | None,
+                    _get_dispatch_mode_pre_dispatch(
+                        torch._C._TorchDispatchModeKey.FUNCTIONAL
+                    ),
                 )
-            return torch._C._get_dispatch_mode(
-                torch._C._TorchDispatchModeKey.FUNCTIONAL
+            return cast(
+                FunctionalTensorMode | None,
+                torch._C._get_dispatch_mode(torch._C._TorchDispatchModeKey.FUNCTIONAL),
             )
 
         if _get_prev_mode() is None:
@@ -706,6 +710,10 @@ class FunctionalTensorMode(TorchDispatchMode):
         """
         m = torch._C._get_dispatch_mode(torch._C._TorchDispatchModeKey.PROXY)
         if m is not None:
+            from torch.fx.experimental.proxy_tensor import ProxyTorchDispatchMode
+
+            if not isinstance(m, ProxyTorchDispatchMode):
+                raise AssertionError(f"Expected ProxyTorchDispatchMode, got {type(m)}")
             for a in pytree.tree_leaves([args, kwargs]):
                 if not isinstance(a, FunctionalTensor):
                     continue
