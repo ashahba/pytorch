@@ -668,6 +668,7 @@ class ExternKernelOutLine(WrapperLine):
             args,
             device,
             self.node.get_stack_traces(),
+            isinstance(node, ir.FallbackKernelOut),
         )
 
     def codegen_fx(self, converter: FxConverter) -> FxConversionFunc:
@@ -695,7 +696,11 @@ class ExternKernelMultiOutLine(WrapperLine):
         ):
             args.append(f"{out_name}={out_node.get_name()}")
 
-        code.writeline(f"{node.get_name()} = {kernel_name}({', '.join(args)})")
+        line = f"{node.get_name()} = {kernel_name}({', '.join(args)})"
+        if isinstance(node, ir.FallbackKernel):
+            self.wrapper.codegen_fallback_line(line)
+        else:
+            code.writeline(line)
 
 
 @dataclasses.dataclass
@@ -1344,6 +1349,7 @@ class PythonWrapperCodegen(CodeGen):
         self.none_str = "None"
         self.move_begin = "std::move(" if V.graph.cpp_wrapper else ""
         self.move_end = ")" if V.graph.cpp_wrapper else ""
+        self.needs_fallback_dispatch_guard = False
         self.last_seen_device_guard_index: int | None = None
         self.supports_intermediate_hooks = True
         self.user_defined_kernel_cache: dict[
@@ -2045,11 +2051,17 @@ class PythonWrapperCodegen(CodeGen):
             wrapper_name = kernel_name
 
         if no_return:
-            self.writeline(f"{self.declare}{wrapper_name}({', '.join(args)}){ending}")
+            line = f"{self.declare}{wrapper_name}({', '.join(args)}){ending}"
         else:
-            self.writeline(
-                f"{self.declare}{output_name} = {wrapper_name}({', '.join(args)}){ending}"
+            line = (
+                f"{self.declare}{output_name} = "
+                f"{wrapper_name}({', '.join(args)}){ending}"
             )
+        if isinstance(extern_kernel, ir.FallbackKernel):
+            line = self.wrap_fallback_dispatch(line)
+        self.writeline(line)
+
+        if not no_return:
             if (
                 self.supports_intermediate_hooks
                 and config.generate_intermediate_hooks
@@ -2075,6 +2087,7 @@ class PythonWrapperCodegen(CodeGen):
         args: list[str],
         device: str,
         stack_traces: OrderedSet[str] | None = None,
+        disable_autograd: bool = False,
     ) -> None:
         # add debug printer code for triton kernel calls at (jit) inductor level
         debug_printer_manager = V.graph.wrapper_code.debug_printer
@@ -2087,7 +2100,10 @@ class PythonWrapperCodegen(CodeGen):
                 )
             else:
                 wrapper_name = kernel
-            self.writeline(f"{wrapper_name}({', '.join(args)})")
+            line = f"{wrapper_name}({', '.join(args)})"
+            if disable_autograd:
+                line = self.wrap_fallback_dispatch(line)
+            self.writeline(line)
 
     def _generate_tma_descriptor_call_experimental(self, desc, apply_size_hints=False):
         dims = desc.dims
@@ -2161,7 +2177,7 @@ class PythonWrapperCodegen(CodeGen):
             if reduce:
                 line += f", reduce={repr(reduce)}"
         line += ")"
-        self.writeline(line)
+        self.writeline(self.wrap_fallback_dispatch(line))
 
     def define_extern_kernel_profile_wrapper(self, kernel_name: str, suffix: str):
         """Wrap extern calls so profiler events use names with provenance metadata."""
@@ -2198,7 +2214,7 @@ class PythonWrapperCodegen(CodeGen):
     def _generate_index_put_fallback(self, kernel, x, indices, values, accumulate):
         indices_str = f"[{', '.join(indices)}]"
         args = [x, indices_str, values, accumulate]
-        self.writeline(self.wrap_kernel_call(kernel, args))
+        self.writeline(self.wrap_fallback_dispatch(self.wrap_kernel_call(kernel, args)))
 
     def generate_fallback_kernel_with_runtime_lookup(
         self,
@@ -2209,7 +2225,11 @@ class PythonWrapperCodegen(CodeGen):
         raw_args: Sequence[Any],
         outputs: Sequence[ir.Buffer],
     ) -> None:
-        self.writeline(f"{buf_name} = {python_kernel_name}({', '.join(get_args())})")
+        self.writeline(
+            self.wrap_fallback_dispatch(
+                f"{buf_name} = {python_kernel_name}({', '.join(get_args())})"
+            )
+        )
 
     def generate(self, is_inference):
         with dynamo_timed("PythonWrapperCodegen.generate"):
@@ -2254,18 +2274,42 @@ class PythonWrapperCodegen(CodeGen):
         else:
             self.header.splice(kernel_defs)
 
+    @staticmethod
+    def _wrapper_line_needs_fallback_dispatch_guard(line: Line) -> bool:
+        if isinstance(line, (IndexPutFallbackLine, ScatterFallbackLine)):
+            return True
+        if isinstance(
+            line,
+            (ExternKernelAllocLine, ExternKernelOutLine, ExternKernelMultiOutLine),
+        ):
+            return isinstance(line.node, (ir.FallbackKernel, ir.FallbackKernelOut))
+        return False
+
+    def should_wrap_entire_wrapper_call_below_autograd(self) -> bool:
+        if V.graph.cpp_wrapper:
+            return False
+        return self.needs_fallback_dispatch_guard or any(
+            self._wrapper_line_needs_fallback_dispatch_guard(line)
+            for line in self.lines
+        )
+
     def _generate(self, is_inference):
         if config.profile_bandwidth:
             self.write_triton_header_once()
 
         with contextlib.ExitStack() as stack:
+            self.run_wrapper_ir_passes(is_inference)
+
             stack.enter_context(self.wrapper_call.indent())
+            if self.should_wrap_entire_wrapper_call_below_autograd():
+                self.wrapper_call.writeline(
+                    "with torch._C._AutoDispatchBelowADInplaceOrView():"
+                )
+                stack.enter_context(self.wrapper_call.indent())
             if config.profiler_mark_wrapper_call:
                 self.generate_profiler_mark_wrapper_call(stack)
             if config.profile_bandwidth:
                 self.generate_start_graph()
-
-            self.run_wrapper_ir_passes(is_inference)
 
             if config.triton.store_cubin and not config.triton.autotune_at_compile_time:
                 self.generate_reset_kernel_saved_flags()
@@ -2685,6 +2729,13 @@ class PythonWrapperCodegen(CodeGen):
         self.writeline(f"{event_var} = torch.Event()")
         self.writeline(f"{event_var}.record()")
         self.writeline(f"{event_var}.synchronize()")
+
+    def codegen_fallback_line(self, line: str) -> None:
+        self.needs_fallback_dispatch_guard = True
+        self.writeline(line)
+
+    def codegen_fallback_device_copy(self, src, dst, non_blocking: bool | str):
+        self.codegen_fallback_line(f"{dst}.copy_({src}, {non_blocking})")
 
     def codegen_multi_output(self, node: ir.MultiOutput):
         result_name = node.get_name()
@@ -3390,6 +3441,10 @@ class PythonWrapperCodegen(CodeGen):
 
     def wrap_kernel_call(self, name, call_args):
         return f"{name}({', '.join(call_args)}){self.ending}"
+
+    def wrap_fallback_dispatch(self, line):
+        self.needs_fallback_dispatch_guard = True
+        return line
 
     def generate_profiler_mark_wrapper_call(self, stack):
         self.wrapper_call.writeline("from torch.profiler import record_function")
