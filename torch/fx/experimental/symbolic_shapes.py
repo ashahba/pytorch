@@ -4980,7 +4980,9 @@ class ShapeEnv:
                 and hint_overrides
                 and i in hint_overrides
             ):
-                self.var_to_hint_override[sym_sizes[-1].node.expr] = hint_overrides[i]
+                self._set_unbacked_var_to_hint_override(
+                    sym_sizes[-1], hint_overrides[i]
+                )
 
         sym_strides = []
         for i, stride_expr in enumerate(new_stride_exprs):
@@ -5409,6 +5411,40 @@ class ShapeEnv:
             "create_unbacked_symint", symbol, vr, source, sym_node=sym_node
         )
         return SymInt(sym_node)
+
+    @record_shapeenv_event()
+    def _register_unbacked_symint_input(
+        self,
+        symint: SymInt,
+        source: Source | None = None,
+        value_range: ValueRanges[sympy.Expr] | None = None,
+        hint: int | None = None,
+    ) -> None:
+        """Record metadata for a raw unbacked SymInt lifted as graph input."""
+        expr = symint.node.expr
+        if not isinstance(expr, sympy.Symbol):
+            raise AssertionError(f"{expr} is not a basic Symbol.")
+
+        self.unbacked_inputs.add(expr)
+        if value_range is not None:
+            self.var_to_range[expr] = value_range
+        if hint is not None:
+            self.var_to_hint_override[expr] = hint
+
+        if source is not None:
+            self.source_to_var[source.name] = expr
+            var_sources = self.var_to_sources.setdefault(expr, [])
+            if source not in var_sources:
+                var_sources.append(source)
+
+    @record_shapeenv_event()
+    def _set_unbacked_var_to_hint_override(self, symint: SymInt, hint: int) -> None:
+        expr = symint.node.expr
+        if not isinstance(expr, sympy.Symbol):
+            raise AssertionError(f"{expr} is not a basic Symbol.")
+        if not self.is_unbacked_symint(expr):
+            raise AssertionError(f"{expr} is not an unbacked SymInt.")
+        self.var_to_hint_override[expr] = hint
 
     def is_unbacked_symint(self, symbol: sympy.Symbol) -> bool:
         """Check if a sympy symbol matches the naming convention for unbacked symbols"""
