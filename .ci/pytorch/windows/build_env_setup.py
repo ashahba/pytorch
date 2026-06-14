@@ -427,22 +427,6 @@ def main() -> None:
     # ATen_CUDA_DEPENDENCY_LIBS, which breaks linking torch_cuda.dll.
     env_out["CMAKE_PREFIX_PATH"] = str(Path(sys.prefix) / "Library")
 
-    # Debug-wheel mode: switches MSVC CRT linkage to /MDd, enables debug
-    # PDBs, and (most importantly) gives us a wheel whose libtorch_cpu.dll
-    # / torch_cuda.dll are ABI-compatible with debug-built user code, so
-    # the libtorch debug zip published from .github/workflows/...-libtorch-
-    # debug-... can be repackaged out of it via extract_libtorch_from_wheel.
-    if os.environ.get("LIBTORCH_CONFIG") == "debug":
-        env_out["DEBUG"] = "1"
-        env_out["CMAKE_BUILD_TYPE"] = "Debug"
-        # Propagate DEBUG into os.environ now, not just env_out: setup_cuda()
-        # reads os.environ["DEBUG"] to choose the debug vs release MAGMA
-        # archive, and it runs before os.environ.update(env_out) below.
-        # Without this a debug CUDA build links the release MAGMA (/MD) into
-        # /MDd torch_cuda and fails with LNK2038 RuntimeLibrary mismatch.
-        os.environ["DEBUG"] = "1"
-        print("Debug-wheel mode: DEBUG=1, CMAKE_BUILD_TYPE=Debug")
-
     # Locate vcvarsall.bat up front so XPU can hand the VS install root to
     # oneAPI's vars.bat. vcvarsall lives at
     # <VS_INSTALL>/VC/Auxiliary/Build/vcvarsall.bat.
