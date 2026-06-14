@@ -444,6 +444,47 @@ graph():
         }
         ep = export(MyModel(), inps, dynamic_shapes=spec)
 
+    def test_group_norm_spatial_dynamic_temporal_dim(self):
+        class GroupNormSpatial(torch.nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.norm_fn = torch.nn.GroupNorm(num_groups=2, num_channels=4)
+
+            def forward(self, inputs):
+                b, c, t, h, w = inputs.shape
+                inputs = inputs.permute(0, 2, 1, 3, 4).flatten(0, 1)
+                out = self.norm_fn(inputs)
+                return out.reshape(b, t, c, h, w).permute(0, 2, 1, 3, 4)
+
+        class Model(torch.nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.gn1 = GroupNormSpatial()
+                self.gn2 = GroupNormSpatial()
+
+            def forward(self, x):
+                x = x[:, :, ::2, :, :]
+                x = self.gn1(x)
+                x = x[:, :, ::2, :, :]
+                return self.gn2(x)
+
+        model = Model()
+        x = torch.randn(1, 4, 28, 8, 8)
+        dynamic_t = Dim("dim_2", min=1, max=200)
+        dynamic_h = Dim("dim_3", min=2, max=640)
+        dynamic_w = Dim("dim_4", min=2, max=640)
+
+        ep = export(
+            model,
+            (x,),
+            dynamic_shapes={"x": {2: dynamic_t, 3: dynamic_h, 4: dynamic_w}},
+            strict=True,
+        )
+
+        for t in (1, 2, 3, 4, 28):
+            inp = torch.randn(1, 4, t, 8, 8)
+            self.assertEqual(ep.module()(inp), model(inp))
+
     @torch.fx.experimental._config.patch(backed_size_oblivious=True)
     def test_view_unify_cross_symbols(self):
         """
@@ -7303,15 +7344,14 @@ def forward(self, p_linear_weight, p_linear_bias, b_buffer, x):
         self.assertTrue(torch.allclose(ep.module()(x, y), model(x, y)))
         x2 = torch.arange(4).reshape((2, 2))
         y2 = torch.arange(9).reshape((3, 3))
+        expected_guard = (
+            "max(x.size()[1], y.size()[1]) == x.size()[1]"
+            if is_retracebility_test(self._testMethodName)
+            else "max(1, x.size()[1], y.size()[1]) == x.size()[1]"
+        )
         with self.assertRaisesRegex(
             AssertionError,
-            (
-                escape("Guard failed: max(x.size()[1], y.size()[1]) == x.size()[1]")
-                if is_retracebility_test(self._testMethodName)
-                else escape(
-                    "Guard failed: max(1, x.size()[1], y.size()[1]) == x.size()[1]"
-                )
-            ),
+            rf"Guard failed: (?:x\.size\(\)\[0\] == 1 or )?{escape(expected_guard)}",
         ):
             # TODO: this should not error?
             self.assertTrue(torch.allclose(ep.module()(x2, y2), model(x2, y2)))
