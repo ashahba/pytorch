@@ -1,5 +1,6 @@
 # Owner(s): ["module: inductor"]
 import copy
+import importlib
 import os
 import unittest
 from collections.abc import Callable
@@ -2149,6 +2150,13 @@ class TestPatternMatcher(TestCase):
             (t, 0),
             {},
         )
+        if not torch.distributed.is_available():
+            self.skipTest("FSDP test ops require distributed support")
+        try:
+            importlib.import_module("torch.distributed.fsdp._fully_shard._fsdp_param")
+        except ImportError as e:
+            self.skipTest(f"FSDP test ops are unavailable: {e}")
+
         check(
             "call_function",
             torch.ops.fsdp.split_with_sizes_copy,
