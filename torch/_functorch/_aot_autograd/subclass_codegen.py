@@ -267,8 +267,10 @@ def _codegen_subclass_wrapper_source(
     # Inductor triton kernels bypass __torch_dispatch__, so we must call
     # trigger_wait() before the compiled graph uses the data.
     if act_input_indices:
+        tensor_type = state.add_global(state.fresh_name("_tensor_type"), torch.Tensor)
         for i in act_input_indices:
-            state.emit(f"args[{i}] = args[{i}].trigger_wait()")
+            state.emit(f"if type(args[{i}]) is not {tensor_type}:")
+            state.emit(f"args[{i}] = args[{i}].trigger_wait()", indent=2)
 
     # --- Input unwrapping ---
     state.emit("unwrapped_args = []")
