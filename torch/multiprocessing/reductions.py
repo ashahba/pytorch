@@ -169,7 +169,11 @@ def rebuild_xpu_tensor(
         # torch.frombuffer rejects zero-length buffers; construct empty tensor directly
         t = torch.empty(size, dtype=dtype, device="cpu")
     else:
-        t = torch.frombuffer(raw_bytes, dtype=torch.uint8).view(dtype).reshape(size)
+        t = (
+            torch.frombuffer(bytearray(raw_bytes), dtype=torch.uint8)
+            .view(dtype)
+            .reshape(size)
+        )
     t = t.to(device)
     if tensor_cls == torch.nn.parameter.Parameter:
         # It is crucial for integer tensors to receive
@@ -432,7 +436,7 @@ def reduce_tensor(tensor):
         # Use untyped_storage bytes directly instead of numpy().tobytes()
         # so that bfloat16, float8, and complex32 (not supported by numpy)
         # serialize correctly.
-        raw_bytes = bytes(cpu_tensor.untyped_storage())  # noqa: PYREFLY
+        raw_bytes = bytes(cpu_tensor.untyped_storage())  # noqa: PYREFLY[102]
         metadata = (
             tuple(cpu_tensor.size()),
             tensor.requires_grad,

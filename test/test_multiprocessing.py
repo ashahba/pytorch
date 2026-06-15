@@ -25,6 +25,7 @@ from torch.testing._internal.common_utils import (
     load_tests,
     run_tests,
     skipIfRocm,
+    skipIfXpu,
     slowTest,
     TEST_WITH_ASAN,
     TEST_WITH_ROCM,
@@ -491,6 +492,11 @@ class TestMultiprocessingDeviceType(_MultiprocessingTestMixin, TestCase):
             return mp
         return mp.get_context("spawn")
 
+    @skipIfXpu(
+        msg="XPU lacks GPU IPC (no cudaIpcMemHandle equivalent). "
+        "Tensors are serialized as copies; cross-process mutations are not visible. "
+        "See https://github.com/intel/torch-xpu-ops/issues/4000"
+    )
     def test_simple_sharing(self, device):
         ctx = self._get_ctx(device)
         self._test_sharing(ctx, device, torch.float)
@@ -505,6 +511,10 @@ class TestMultiprocessingDeviceType(_MultiprocessingTestMixin, TestCase):
         "non-deterministically hangs with ASAN "
         "https://github.com/pytorch/pytorch/issues/94024",
     )
+    @skipIfXpu(
+        msg="XPU lacks GPU IPC — cross-process mutation visibility not supported. "
+        "See https://github.com/intel/torch-xpu-ops/issues/4000"
+    )
     def test_variable_sharing(self, device):
         ctx = self._get_ctx(device)
         for requires_grad in [True, False]:
@@ -515,6 +525,10 @@ class TestMultiprocessingDeviceType(_MultiprocessingTestMixin, TestCase):
             )
             self._test_autograd_sharing(var, ctx)
 
+    @skipIfXpu(
+        msg="XPU lacks GPU IPC — cross-process mutation visibility not supported. "
+        "See https://github.com/intel/torch-xpu-ops/issues/4000"
+    )
     def test_parameter_sharing(self, device):
         ctx = self._get_ctx(device)
         param = Parameter(torch.arange(1.0, 26, device=device).view(5, 5))
