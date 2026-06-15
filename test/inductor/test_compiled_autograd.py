@@ -48,6 +48,7 @@ from torch.testing._internal.common_utils import (
     parametrize,
     scoped_load_inline,
     skipIfWindows,
+    skipIfXpu,
 )
 from torch.testing._internal.hop_db import hop_db
 from torch.testing._internal.inductor_utils import (
@@ -3273,6 +3274,7 @@ main()
         # (no GPU devices to use cudagraphs with)
         self.assertEqual(counters["inductor"]["cudagraph_skips"], 1)
 
+    @skipIfXpu(msg="cudagraphs not supported on xpu for now!")
     @requires_gpu_and_triton
     def test_cudagraphs_sdpa(self):
         query = torch.rand(
