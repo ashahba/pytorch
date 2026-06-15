@@ -40,6 +40,7 @@ class FlexGemmEpilogueConfig:
     quack_config_key: tuple[Any, ...] | None = None
     epilogue_arg_indices: tuple[int, ...] = ()
     epilogue_arg_kinds: tuple[str, ...] = ()
+    aux_out_index: int | None = None
 
 
 class FlexGemmEpilogueKernel(CuteDSLTemplateKernel):
@@ -158,12 +159,15 @@ class FlexGemmEpilogueKernel(CuteDSLTemplateKernel):
 
     def _epilogue_kwargs(self, input_args, config):
         epilogue_args = [input_args[index] for index in config.epilogue_arg_indices]
-        if not epilogue_args:
-            return ""
-        return (
-            f", epilogue_args=({', '.join(epilogue_args)},), "
-            f"epilogue_arg_kinds={config.epilogue_arg_kinds!r}"
-        )
+        kwargs = []
+        if epilogue_args:
+            kwargs.append(
+                f", epilogue_args=({', '.join(epilogue_args)},), "
+                f"epilogue_arg_kinds={config.epilogue_arg_kinds!r}"
+            )
+        if config.aux_out_index is not None:
+            kwargs.append(f", aux_out={input_args[config.aux_out_index]}")
+        return "".join(kwargs)
 
 
 class FlexGemmEpilogueCaller(CuteDSLTemplateCaller):
