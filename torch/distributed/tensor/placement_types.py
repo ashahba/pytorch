@@ -638,7 +638,7 @@ class Shard(torch._C._distributed.Shard):
         local_tensor: torch.Tensor,
         mesh: DeviceMesh,
         mesh_dim: int,
-        current_logical_shape: list[int],
+        current_logical_shape: Sequence[IntLikeType],
         new_shard_dim: int,
         split_factor: int,
     ) -> torch.Tensor:
@@ -1309,11 +1309,11 @@ class _StridedShard(torch._C._distributed.StridedShard):
 
     @staticmethod
     def _compute_padding_info(
-        logical_size_on_dim: int,
+        logical_size_on_dim: IntLikeType,
         num_chunks: int,
         shard_dim: int,
         split_factor: int = 1,
-    ) -> tuple[bool, int]:
+    ) -> tuple[bool, IntLikeType]:
         """
         Compute padding information for _StridedShard collective operations.
 
@@ -1344,7 +1344,7 @@ class _StridedShard(torch._C._distributed.StridedShard):
                 - max_chunk_size: The maximum chunk size per rank after both levels of splitting.
         """
 
-        def _ceil_div(a: int, b: int) -> int:
+        def _ceil_div(a: IntLikeType, b: IntLikeType) -> IntLikeType:
             return (a + b - 1) // b
 
         if split_factor != 1:
@@ -1400,7 +1400,7 @@ class _StridedShard(torch._C._distributed.StridedShard):
     @maybe_run_for_local_tensor
     def _pad_for_new_shard_dim(
         self,
-        current_logical_shape: list[int],
+        current_logical_shape: Sequence[IntLikeType],
         local_tensor: torch.Tensor,
         num_chunks: int,
         old_shard_dim: int,
@@ -1451,7 +1451,7 @@ class _StridedShard(torch._C._distributed.StridedShard):
     @maybe_run_for_local_tensor
     def _unpad_for_new_shard_dim(
         self,
-        current_logical_shape: list[int],
+        current_logical_shape: Sequence[IntLikeType],
         local_tensor: torch.Tensor,
         num_chunks: int,
         old_shard_dim: int,
@@ -1480,7 +1480,7 @@ class _StridedShard(torch._C._distributed.StridedShard):
 
         # Build sharded indices to understand the strided pattern
         shape = [1] * old_shard_dim + [old_dim_logical_size]
-        indices_tensor = torch.arange(
+        indices_tensor = torch.arange(  # pyrefly: ignore[no-matching-overload]
             old_dim_logical_size, device=local_tensor.device
         ).view(shape)
         sharded_indices, _ = self._split_tensor(
@@ -1521,7 +1521,7 @@ class _StridedShard(torch._C._distributed.StridedShard):
         local_tensor: torch.Tensor,
         mesh: DeviceMesh,
         mesh_dim: int,
-        current_logical_shape: list[int],
+        current_logical_shape: Sequence[IntLikeType],
         new_shard_dim: int,
     ) -> torch.Tensor:
         """
