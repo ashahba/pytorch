@@ -3145,6 +3145,10 @@ DistributeWithDeviceOrderTestWithLocalTensor = create_local_tensor_test_class(
     base_class=LocalDTensorContinuousTestBase,
 )
 
+DistributeWithStridedShardTestLocalTensor = create_local_tensor_test_class(
+    DistributeWithStridedShardTest,
+)
+
 
 class _CollectiveDtypeTracer(torch.utils._python_dispatch.TorchDispatchMode):
     """Records the dtype of the first tensor argument for each _c10d_functional op."""
